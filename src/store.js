@@ -103,6 +103,37 @@ export function updatePayPeriodAmount(id, amount) {
   save(KEYS.payPeriods, periods);
 }
 
+export function updatePayPeriod(id, updates) {
+  const periods = load(KEYS.payPeriods, []).map(p => p.id === id ? { ...p, ...updates } : p);
+  save(KEYS.payPeriods, periods);
+}
+
+export function addPayPeriod(data) {
+  const periods = load(KEYS.payPeriods, []);
+  periods.push({
+    id: 'pp-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+    date: data.date,
+    amount: data.amount || 0,
+    actual: data.actual ?? null, // actual amount received (null = not yet received)
+    created_at: new Date().toISOString(),
+  });
+  save(KEYS.payPeriods, periods);
+}
+
+export function deletePayPeriod(id) {
+  save(KEYS.payPeriods, load(KEYS.payPeriods, []).filter(p => p.id !== id));
+}
+
+export function updateAllPayPeriodDefaults(amount) {
+  // Update all future periods that haven't been customized
+  const today = new Date().toISOString().split('T')[0];
+  const periods = load(KEYS.payPeriods, []).map(p => {
+    if (p.date >= today) return { ...p, amount };
+    return p;
+  });
+  save(KEYS.payPeriods, periods);
+}
+
 // ── Auth (optional PIN) ─────────────────────────────────────────
 
 export function hasPin() { return !!load(KEYS.auth, null); }

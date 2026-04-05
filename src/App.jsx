@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { subscribe, listCards, createCard, updateCard, deleteCard, listPayPeriods, seedPayPeriods, updatePayPeriodAmount, loadTabNames, saveTabNames, loadTabOrder, saveTabOrder, loadGroupOrder, saveGroupOrder, loadGroupCollapsed, saveGroupCollapsed, exportAll, importAll } from './store';
+import { subscribe, listCards, createCard, updateCard, deleteCard, listPayPeriods, seedPayPeriods, updatePayPeriodAmount, updatePayPeriod, addPayPeriod, deletePayPeriod, updateAllPayPeriodDefaults, loadTabNames, saveTabNames, loadTabOrder, saveTabOrder, loadGroupOrder, saveGroupOrder, loadGroupCollapsed, saveGroupCollapsed, exportAll, importAll } from './store';
 import { fmt, fmtDate, daysUntil, resolveStatus, avgScore, scoreColor, scoreBarPct, isCCType, isBankType, isCardOrBank, NETWORKS, CARD_TYPES, BILL_TYPES, BILL_FREQUENCIES, BANK_ACCOUNT_TYPES, INVESTMENT_TYPES, PAYMENT_STATUSES, STATUS_COLORS, TAB_DEFS, DEFAULT_TAB_ORDER, DEFAULT_GROUP_ORDER, getPaidMonths, currentMonthKey } from './utils';
 import { TabIcon, PlusIcon, TrashIcon, ChevronIcon } from './components/Icons';
 import LiveCountdown from './components/LiveCountdown';
@@ -636,42 +636,174 @@ function ScoresPage({ cards, allScoredItems, overallAvgScore, editing, editValue
 // ══════════════════════════════════════════════════════════════════
 
 function PayPeriodsPage({ payPeriods, payFilter, setPayFilter, editingPayId, setEditingPayId, editingPayValue, setEditingPayValue, payInputRef, tabNames }) {
+  const [editingCell, setEditingCell] = useState(null); // { id, field }
+  const [cellValue, setCellValue] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newDate, setNewDate] = useState('');
+  const [newAmount, setNewAmount] = useState('');
+  const [showSetup, setShowSetup] = useState(false);
+  const [setupAmount, setSetupAmount] = useState('');
+  const cellRef = useRef(null);
+
+  useEffect(() => { if (editingCell && cellRef.current) { cellRef.current.focus(); cellRef.current.select(); } }, [editingCell]);
+
   const ppIsPast = d => { const t = new Date(); t.setHours(0,0,0,0); return new Date(d + 'T00:00:00') < t; };
   const ppIsUpcoming = d => { const t = new Date(); t.setHours(0,0,0,0); const dd = new Date(d + 'T00:00:00'); const tw = new Date(t); tw.setDate(tw.getDate() + 14); return dd >= t && dd <= tw; };
   const ppYear = d => d.split('-')[0];
   const ppYears = [...new Set(payPeriods.map(p => ppYear(p.date)))].sort();
   const pastPP = payPeriods.filter(p => ppIsPast(p.date));
   const futurePP = payPeriods.filter(p => !ppIsPast(p.date));
-  const totalAll = payPeriods.reduce((s, p) => s + p.amount, 0);
-  const totalPast = pastPP.reduce((s, p) => s + p.amount, 0);
+
+  // Earned = sum of actual amounts for past periods (falls back to expected amount)
+  const totalEarned = pastPP.reduce((s, p) => s + (p.actual != null ? p.actual : p.amount), 0);
+  const totalExpected = pastPP.reduce((s, p) => s + p.amount, 0);
   const totalFuture = futurePP.reduce((s, p) => s + p.amount, 0);
+  const totalAll = totalEarned + totalFuture;
 
   let ppFiltered = payPeriods;
   if (payFilter === 'upcoming') ppFiltered = futurePP;
   else if (payFilter === 'past') ppFiltered = pastPP;
   else if (payFilter !== 'all') ppFiltered = payPeriods.filter(p => ppYear(p.date) === payFilter);
-  const filteredTotal = ppFiltered.reduce((s, p) => s + p.amount, 0);
+  const filteredTotal = ppFiltered.reduce((s, p) => {
+    if (ppIsPast(p.date)) return s + (p.actual != null ? p.actual : p.amount);
+    return s + p.amount;
+  }, 0);
 
-  const commitPayEdit = () => {
-    if (!editingPayId) return;
-    const num = parseFloat(editingPayValue);
-    if (!isNaN(num) && num >= 0) updatePayPeriodAmount(editingPayId, num);
-    setEditingPayId(null);
+  // ── Cell edit commit ──
+  const commitCellEdit = () => {
+    if (!editingCell) return;
+    const { id, field } = editingCell;
+    if (field === 'amount' || field === 'actual') {
+      const num = parseFloat(cellValue);
+      if (!isNaN(num) && num >= 0) {
+        updatePayPeriod(id, { [field]: num });
+      } else if (field === 'actual' && cellValue.trim() === '') {
+        // Clear actual to revert to expected
+        updatePayPeriod(id, { actual: null });
+      }
+    } else if (field === 'date') {
+      if (cellValue) updatePayPeriod(id, { date: cellValue });
+    }
+    setEditingCell(null);
+  };
+
+  const startCellEdit = (pp, field) => {
+    const val = field === 'actual' ? (pp.actual != null ? String(pp.actual) : '') : String(pp[field] ?? '');
+    setEditingCell({ id: pp.id, field });
+    setCellValue(val);
+  };
+
+  const cellKeyDown = (e) => {
+    if (e.key === 'Enter') commitCellEdit();
+    if (e.key === 'Escape') setEditingCell(null);
+  };
+
+  // ── Add pay period ──
+  const handleAdd = () => {
+    const amt = parseFloat(newAmount);
+    if (!newDate || isNaN(amt)) return;
+    addPayPeriod({ date: newDate, amount: amt });
+    setNewDate('');
+    setNewAmount('');
+    setShowAddForm(false);
+  };
+
+  // ── Bulk update future amounts ──
+  const handleSetupSave = () => {
+    const amt = parseFloat(setupAmount);
+    if (isNaN(amt) || amt < 0) return;
+    updateAllPayPeriodDefaults(amt);
+    setShowSetup(false);
+    setSetupAmount('');
+  };
+
+  // ── Difference display (actual vs expected) ──
+  const diffBadge = (pp) => {
+    if (pp.actual == null || !ppIsPast(pp.date)) return null;
+    const diff = pp.actual - pp.amount;
+    if (diff === 0) return null;
+    return (
+      <span className={`text-xs font-mono ml-1 ${diff > 0 ? 'text-green-400' : 'text-red-400'}`}>
+        ({diff > 0 ? '+' : ''}{fmt(diff)})
+      </span>
+    );
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-dark-100">{tabNames?.payperiods || 'Pay Periods'}</h1>
-        <p className="text-dark-400 text-sm mt-1">Bi-weekly pay schedule · Click any amount to edit</p>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-dark-100">{tabNames?.payperiods || 'Pay Periods'}</h1>
+          <p className="text-dark-400 text-sm mt-1">Click any cell to edit · Tap Earned to log actual income</p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setShowSetup(!showSetup)} className="btn-ghost border border-dark-600 text-xs">⚙️ Set Default Pay</button>
+          <button onClick={() => setShowAddForm(!showAddForm)} className="btn-primary"><PlusIcon /> Add Period</button>
+        </div>
       </div>
 
+      {/* Bulk set default pay amount */}
+      {showSetup && (
+        <div className="card flex items-end gap-3 flex-wrap">
+          <div className="flex-1 min-w-[150px]">
+            <label className="text-xs text-dark-400 uppercase tracking-wide font-medium block mb-1">Default Pay Amount</label>
+            <p className="text-xs text-dark-500 mb-2">Updates all future pay periods to this amount</p>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-400">$</span>
+              <input type="number" step="0.01" min="0" value={setupAmount} onChange={e => setSetupAmount(e.target.value)}
+                placeholder="e.g. 2100" className="w-full pl-8" onKeyDown={e => { if (e.key === 'Enter') handleSetupSave(); }} />
+            </div>
+          </div>
+          <button onClick={handleSetupSave} disabled={!setupAmount} className="btn-primary">Update All Future</button>
+          <button onClick={() => setShowSetup(false)} className="btn-ghost">Cancel</button>
+        </div>
+      )}
+
+      {/* Add new pay period */}
+      {showAddForm && (
+        <div className="card flex items-end gap-3 flex-wrap">
+          <div>
+            <label className="text-xs text-dark-400 uppercase tracking-wide font-medium block mb-1">Pay Date</label>
+            <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="text-xs text-dark-400 uppercase tracking-wide font-medium block mb-1">Amount</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-dark-400">$</span>
+              <input type="number" step="0.01" min="0" value={newAmount} onChange={e => setNewAmount(e.target.value)} placeholder="0.00" className="pl-8 w-32"
+                onKeyDown={e => { if (e.key === 'Enter') handleAdd(); }} />
+            </div>
+          </div>
+          <button onClick={handleAdd} disabled={!newDate || !newAmount} className="btn-primary">Add</button>
+          <button onClick={() => setShowAddForm(false)} className="btn-ghost">Cancel</button>
+        </div>
+      )}
+
+      {/* Summary cards */}
       <div className="grid grid-cols-3 gap-3">
-        <div className="card"><p className="text-dark-400 text-xs uppercase mb-1">Total (5yr)</p><p className="text-xl font-bold text-dark-100">{fmt(totalAll)}</p><p className="text-dark-500 text-xs">{payPeriods.length} periods</p></div>
-        <div className="card"><p className="text-dark-400 text-xs uppercase mb-1">Earned</p><p className="text-xl font-bold text-green-400">{fmt(totalPast)}</p><p className="text-dark-500 text-xs">{pastPP.length} periods</p></div>
-        <div className="card"><p className="text-dark-400 text-xs uppercase mb-1">Remaining</p><p className="text-xl font-bold text-dark-100">{fmt(totalFuture)}</p><p className="text-dark-500 text-xs">{futurePP.length} periods</p></div>
+        <div className="card">
+          <p className="text-dark-400 text-xs uppercase mb-1">Total</p>
+          <p className="text-xl font-bold text-dark-100">{fmt(totalAll)}</p>
+          <p className="text-dark-500 text-xs">{payPeriods.length} periods</p>
+        </div>
+        <div className="card">
+          <p className="text-dark-400 text-xs uppercase mb-1">Earned (Actual)</p>
+          <p className="text-xl font-bold text-green-400">{fmt(totalEarned)}</p>
+          <p className="text-dark-500 text-xs">{pastPP.length} periods</p>
+          {totalEarned !== totalExpected && (
+            <p className={`text-xs mt-1 ${totalEarned > totalExpected ? 'text-green-400' : 'text-red-400'}`}>
+              {totalEarned > totalExpected ? '↑' : '↓'} {fmt(Math.abs(totalEarned - totalExpected))} vs expected
+            </p>
+          )}
+        </div>
+        <div className="card">
+          <p className="text-dark-400 text-xs uppercase mb-1">Remaining</p>
+          <p className="text-xl font-bold text-dark-100">{fmt(totalFuture)}</p>
+          <p className="text-dark-500 text-xs">{futurePP.length} periods</p>
+        </div>
       </div>
 
+      {/* Filter tabs */}
       <div className="flex gap-1 border-b border-dark-600/50 overflow-x-auto">
         {[{ id: 'upcoming', label: 'Upcoming' }, { id: 'past', label: 'Past' }, { id: 'all', label: 'All' }, ...ppYears.map(y => ({ id: y, label: y }))].map(t => (
           <button key={t.id} onClick={() => setPayFilter(t.id)} className={`shrink-0 px-3 py-2 text-sm font-medium border-b-2 transition-colors ${payFilter === t.id ? 'border-accent text-dark-100' : 'border-transparent text-dark-400 hover:text-dark-200'}`}>{t.label}</button>
@@ -680,13 +812,16 @@ function PayPeriodsPage({ payPeriods, payFilter, setPayFilter, editingPayId, set
 
       <p className="text-dark-400 text-sm">{ppFiltered.length} period{ppFiltered.length !== 1 ? 's' : ''} · {fmt(filteredTotal)} total</p>
 
+      {/* Pay period table */}
       <div className="card !p-0 overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full min-w-[500px]">
           <thead>
             <tr className="border-b border-dark-600/50">
               <th className="text-left text-xs text-dark-400 uppercase px-3 md:px-5 py-3">Date</th>
-              <th className="text-right text-xs text-dark-400 uppercase px-3 md:px-5 py-3">Amount</th>
+              <th className="text-right text-xs text-dark-400 uppercase px-3 md:px-5 py-3">Expected</th>
+              <th className="text-right text-xs text-dark-400 uppercase px-3 md:px-5 py-3">Actual</th>
               <th className="text-left text-xs text-dark-400 uppercase px-3 md:px-5 py-3">Status</th>
+              <th className="px-3 md:px-5 py-3 w-10"></th>
             </tr>
           </thead>
           <tbody>
@@ -694,26 +829,55 @@ function PayPeriodsPage({ payPeriods, payFilter, setPayFilter, editingPayId, set
               const past = ppIsPast(pp.date);
               const upcoming = ppIsUpcoming(pp.date);
               return (
-                <tr key={pp.id} className={`table-row ${past ? 'opacity-60' : ''} ${upcoming ? 'bg-green-500/5' : ''}`}>
+                <tr key={pp.id} className={`table-row group ${past && !pp.actual ? 'opacity-50' : past ? 'opacity-80' : ''} ${upcoming ? 'bg-green-500/5' : ''}`}>
+                  {/* Date - editable */}
                   <td className="px-3 md:px-5 py-3">
-                    <span className="text-dark-100">{fmtDate(pp.date)}</span>
-                    {upcoming && <span className="ml-2 text-[10px] font-semibold text-green-400 uppercase tracking-wide">Upcoming</span>}
-                  </td>
-                  <td className="px-3 md:px-5 py-3 text-right">
-                    {editingPayId === pp.id ? (
-                      <input ref={payInputRef} type="number" step="1" min="0" value={editingPayValue}
-                        onChange={e => setEditingPayValue(e.target.value)} onBlur={commitPayEdit}
-                        onKeyDown={e => { if (e.key === 'Enter') commitPayEdit(); if (e.key === 'Escape') setEditingPayId(null); }}
-                        className="!py-1 !px-2 w-28 text-right ml-auto" />
+                    {editingCell?.id === pp.id && editingCell.field === 'date' ? (
+                      <input ref={cellRef} type="date" value={cellValue} onChange={e => setCellValue(e.target.value)} onBlur={commitCellEdit} onKeyDown={cellKeyDown} className="!py-1 !px-2" />
                     ) : (
-                      <span className="text-dark-100 font-mono cursor-pointer hover:text-accent-hover transition-colors"
-                        onClick={() => { setEditingPayId(pp.id); setEditingPayValue(String(pp.amount)); }}>{fmt(pp.amount)}</span>
+                      <span className="cursor-pointer hover:text-accent-hover transition-colors" onClick={() => startCellEdit(pp, 'date')}>
+                        <span className="text-dark-100">{fmtDate(pp.date)}</span>
+                        {upcoming && <span className="ml-2 text-[10px] font-semibold text-green-400 uppercase tracking-wide">Upcoming</span>}
+                      </span>
                     )}
                   </td>
+                  {/* Expected amount - editable */}
+                  <td className="px-3 md:px-5 py-3 text-right">
+                    {editingCell?.id === pp.id && editingCell.field === 'amount' ? (
+                      <input ref={cellRef} type="number" step="0.01" min="0" value={cellValue}
+                        onChange={e => setCellValue(e.target.value)} onBlur={commitCellEdit} onKeyDown={cellKeyDown}
+                        className="!py-1 !px-2 w-28 text-right ml-auto" />
+                    ) : (
+                      <span className="text-dark-300 font-mono cursor-pointer hover:text-accent-hover transition-colors"
+                        onClick={() => startCellEdit(pp, 'amount')}>{fmt(pp.amount)}</span>
+                    )}
+                  </td>
+                  {/* Actual earned - editable (key feature) */}
+                  <td className="px-3 md:px-5 py-3 text-right">
+                    {editingCell?.id === pp.id && editingCell.field === 'actual' ? (
+                      <input ref={cellRef} type="number" step="0.01" min="0" value={cellValue}
+                        onChange={e => setCellValue(e.target.value)} onBlur={commitCellEdit} onKeyDown={cellKeyDown}
+                        placeholder="Enter actual"
+                        className="!py-1 !px-2 w-28 text-right ml-auto" />
+                    ) : (
+                      <span className={`font-mono cursor-pointer hover:text-accent-hover transition-colors ${pp.actual != null ? 'text-green-400 font-semibold' : 'text-dark-500'}`}
+                        onClick={() => startCellEdit(pp, 'actual')}>
+                        {pp.actual != null ? fmt(pp.actual) : past ? '— click to log —' : '—'}
+                        {diffBadge(pp)}
+                      </span>
+                    )}
+                  </td>
+                  {/* Status */}
                   <td className="px-3 md:px-5 py-3">
-                    {past ? <span className="badge bg-green-500/20 text-green-400">Received</span>
+                    {past && pp.actual != null ? <span className="badge bg-green-500/20 text-green-400">✓ Received</span>
+                      : past ? <span className="badge bg-yellow-500/20 text-yellow-400 cursor-pointer" onClick={() => startCellEdit(pp, 'actual')}>Log Income</span>
                       : upcoming ? <span className="badge bg-blue-500/20 text-blue-400">Next</span>
                       : <span className="badge bg-dark-600 text-dark-300">Scheduled</span>}
+                  </td>
+                  {/* Delete */}
+                  <td className="px-3 md:px-5 py-3 text-right">
+                    <button onClick={() => { if (confirm('Delete this pay period?')) deletePayPeriod(pp.id); }}
+                      className="opacity-0 group-hover:opacity-100 text-dark-500 hover:text-red-400 transition-all p-1 rounded hover:bg-red-500/10"><TrashIcon /></button>
                   </td>
                 </tr>
               );
@@ -722,8 +886,9 @@ function PayPeriodsPage({ payPeriods, payFilter, setPayFilter, editingPayId, set
           <tfoot>
             <tr className="border-t-2 border-dark-600">
               <td className="px-3 md:px-5 py-3 text-dark-300 font-semibold text-sm">Total</td>
-              <td className="px-3 md:px-5 py-3 text-right"><span className="text-dark-100 font-mono font-bold">{fmt(filteredTotal)}</span></td>
-              <td></td>
+              <td className="px-3 md:px-5 py-3 text-right"><span className="text-dark-300 font-mono">{fmt(ppFiltered.reduce((s, p) => s + p.amount, 0))}</span></td>
+              <td className="px-3 md:px-5 py-3 text-right"><span className="text-green-400 font-mono font-bold">{fmt(filteredTotal)}</span></td>
+              <td colSpan={2}></td>
             </tr>
           </tfoot>
         </table>
