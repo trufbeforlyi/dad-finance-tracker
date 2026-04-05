@@ -643,9 +643,13 @@ function PayPeriodsPage({ payPeriods, payFilter, setPayFilter, editingPayId, set
   const [newAmount, setNewAmount] = useState('');
   const [showSetup, setShowSetup] = useState(false);
   const [setupAmount, setSetupAmount] = useState('');
+  const [editingEarned, setEditingEarned] = useState(false);
+  const [earnedValue, setEarnedValue] = useState('');
   const cellRef = useRef(null);
+  const earnedRef = useRef(null);
 
   useEffect(() => { if (editingCell && cellRef.current) { cellRef.current.focus(); cellRef.current.select(); } }, [editingCell]);
+  useEffect(() => { if (editingEarned && earnedRef.current) { earnedRef.current.focus(); earnedRef.current.select(); } }, [editingEarned]);
 
   const ppIsPast = d => { const t = new Date(); t.setHours(0,0,0,0); return new Date(d + 'T00:00:00') < t; };
   const ppIsUpcoming = d => { const t = new Date(); t.setHours(0,0,0,0); const dd = new Date(d + 'T00:00:00'); const tw = new Date(t); tw.setDate(tw.getDate() + 14); return dd >= t && dd <= tw; };
@@ -786,10 +790,36 @@ function PayPeriodsPage({ payPeriods, payFilter, setPayFilter, editingPayId, set
           <p className="text-xl font-bold text-dark-100">{fmt(totalAll)}</p>
           <p className="text-dark-500 text-xs">{payPeriods.length} periods</p>
         </div>
-        <div className="card">
-          <p className="text-dark-400 text-xs uppercase mb-1">Earned (Actual)</p>
-          <p className="text-xl font-bold text-green-400">{fmt(totalEarned)}</p>
-          <p className="text-dark-500 text-xs">{pastPP.length} periods</p>
+        <div className="card cursor-pointer hover:border-green-500/30 transition-colors" onClick={() => { if (!editingEarned) { setEditingEarned(true); setEarnedValue(String(totalEarned)); } }}>
+          <p className="text-dark-400 text-xs uppercase mb-1">Earned</p>
+          {editingEarned ? (
+            <div className="relative" onClick={e => e.stopPropagation()}>
+              <span className="absolute left-0 top-1/2 -translate-y-1/2 text-green-400 font-bold text-xl">$</span>
+              <input ref={earnedRef} type="number" step="0.01" min="0" value={earnedValue}
+                onChange={e => setEarnedValue(e.target.value)}
+                onBlur={() => {
+                  const num = parseFloat(earnedValue);
+                  if (!isNaN(num) && num >= 0 && pastPP.length > 0) {
+                    const perPeriod = Math.round((num / pastPP.length) * 100) / 100;
+                    const remainder = Math.round((num - perPeriod * pastPP.length) * 100) / 100;
+                    pastPP.forEach((p, i) => {
+                      updatePayPeriod(p.id, { actual: i === 0 ? perPeriod + remainder : perPeriod });
+                    });
+                  }
+                  setEditingEarned(false);
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') e.target.blur();
+                  if (e.key === 'Escape') setEditingEarned(false);
+                }}
+                className="!py-0 !px-0 !pl-5 !bg-transparent !border-0 !ring-0 text-xl font-bold text-green-400 w-full focus:!ring-2 focus:!ring-green-500 rounded"
+                style={{ outline: 'none' }}
+              />
+            </div>
+          ) : (
+            <p className="text-xl font-bold text-green-400 hover:text-green-300 transition-colors">{fmt(totalEarned)}</p>
+          )}
+          <p className="text-dark-500 text-xs">{pastPP.length} periods · click to edit</p>
           {totalEarned !== totalExpected && (
             <p className={`text-xs mt-1 ${totalEarned > totalExpected ? 'text-green-400' : 'text-red-400'}`}>
               {totalEarned > totalExpected ? '↑' : '↓'} {fmt(Math.abs(totalEarned - totalExpected))} vs expected
