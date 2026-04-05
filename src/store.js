@@ -77,7 +77,7 @@ export function listPayPeriods() {
   return load(KEYS.payPeriods, []).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export function seedPayPeriods(startDate = '2026-04-03', amount = 2100) {
+export function seedPayPeriods(startDate = '2026-04-03', amount = 0) {
   const periods = [];
   const start = new Date(startDate + 'T00:00:00');
   const end = new Date(start);

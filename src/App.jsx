@@ -51,8 +51,7 @@ export default function App() {
   useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); inputRef.current.select(); } }, [editing]);
   useEffect(() => { if (editingPayId && payInputRef.current) { payInputRef.current.focus(); payInputRef.current.select(); } }, [editingPayId]);
 
-  // Seed pay periods on first load
-  useEffect(() => { if (payPeriods.length === 0) seedPayPeriods(); }, []);
+  // Don't auto-seed — let user set up pay periods themselves
 
   // ── Counts ──
   const counts = {
