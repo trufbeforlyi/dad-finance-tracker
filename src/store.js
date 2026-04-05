@@ -125,12 +125,8 @@ export function deletePayPeriod(id) {
 }
 
 export function updateAllPayPeriodDefaults(amount) {
-  // Update all future periods that haven't been customized
-  const today = new Date().toISOString().split('T')[0];
-  const periods = load(KEYS.payPeriods, []).map(p => {
-    if (p.date >= today) return { ...p, amount };
-    return p;
-  });
+  // Update ALL periods (past and future) to the new default amount
+  const periods = load(KEYS.payPeriods, []).map(p => ({ ...p, amount, actual: amount }));
   save(KEYS.payPeriods, periods);
 }
 
