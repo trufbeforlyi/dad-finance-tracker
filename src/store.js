@@ -1,157 +1,146 @@
-// Simple localStorage-based store with reactive updates
+// ── localStorage-based store (replaces SQLite) ──────────────────
+import { v4 } from './utils';
 
 const KEYS = {
-  transactions: 'ft-transactions',
-  categories: 'ft-categories',
+  cards: 'ft-cards',
   payPeriods: 'ft-pay-periods',
-  settings: 'ft-settings',
+  auth: 'ft-auth',
+  tabNames: 'ft-tab-names',
+  tabOrder: 'ft-tab-order',
+  groupOrder: 'ft-group-order',
+  groupCollapsed: 'ft-group-collapsed',
 };
 
 const listeners = new Set();
-
-function emit() {
-  listeners.forEach((fn) => fn());
-}
-
-export function subscribe(fn) {
-  listeners.add(fn);
-  return () => listeners.delete(fn);
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
+function emit() { listeners.forEach(fn => fn()); }
+export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
 function load(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
+  try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : fallback; } catch { return fallback; }
+}
+function save(key, data) { localStorage.setItem(key, JSON.stringify(data)); emit(); }
+
+// ── Credit Cards / Bills / Banks / Investments ──────────────────
+
+export function listCards() {
+  return load(KEYS.cards, []).sort((a, b) => {
+    if (a.is_pinned !== b.is_pinned) return b.is_pinned - a.is_pinned;
+    return (a.date_due || '').localeCompare(b.date_due || '');
+  });
 }
 
-function save(key, data) {
-  localStorage.setItem(key, JSON.stringify(data));
-  emit();
+export function createCard(data) {
+  const cards = load(KEYS.cards, []);
+  const card = {
+    id: v4(),
+    card_name: data.card_name || 'New Item',
+    card_network: data.card_network || 'Visa',
+    card_type: data.card_type || 'Credit',
+    amount_due: data.amount_due || 0,
+    min_payment: data.min_payment || 0,
+    date_due: data.date_due || new Date().toISOString().split('T')[0],
+    credit_limit: data.credit_limit || 0,
+    score_equifax: data.score_equifax ?? null,
+    score_experian: data.score_experian ?? null,
+    score_transunion: data.score_transunion ?? null,
+    status: data.status || 'Pending',
+    bill_type: data.bill_type || null,
+    bill_frequency: data.bill_frequency || null,
+    bank_account_type: data.bank_account_type || null,
+    investment_account_type: data.investment_account_type || null,
+    balance: data.balance || 0,
+    is_pinned: data.is_pinned || 0,
+    is_protected: data.is_protected || 0,
+    paid_months: data.paid_months || '[]',
+    created_at: new Date().toISOString(),
+  };
+  cards.push(card);
+  save(KEYS.cards, cards);
+  return card;
 }
 
-// ── Default Categories ──────────────────────────────────────────────────────
-
-const DEFAULT_CATEGORIES = [
-  { id: 'cat-1', name: 'Groceries', color: '#22c55e', icon: '🛒', type: 'expense' },
-  { id: 'cat-2', name: 'Utilities', color: '#eab308', icon: '💡', type: 'expense' },
-  { id: 'cat-3', name: 'Gas', color: '#f97316', icon: '⛽', type: 'expense' },
-  { id: 'cat-4', name: 'Rent/Mortgage', color: '#ef4444', icon: '🏠', type: 'expense' },
-  { id: 'cat-5', name: 'Dining Out', color: '#a855f7', icon: '🍔', type: 'expense' },
-  { id: 'cat-6', name: 'Entertainment', color: '#ec4899', icon: '🎬', type: 'expense' },
-  { id: 'cat-7', name: 'Healthcare', color: '#14b8a6', icon: '🏥', type: 'expense' },
-  { id: 'cat-8', name: 'Transportation', color: '#6366f1', icon: '🚗', type: 'expense' },
-  { id: 'cat-9', name: 'Clothing', color: '#f43f5e', icon: '👕', type: 'expense' },
-  { id: 'cat-10', name: 'Insurance', color: '#0ea5e9', icon: '🛡️', type: 'expense' },
-  { id: 'cat-11', name: 'Salary', color: '#22c55e', icon: '💰', type: 'income' },
-  { id: 'cat-12', name: 'Side Income', color: '#3b82f6', icon: '💼', type: 'income' },
-  { id: 'cat-13', name: 'Refund', color: '#8b5cf6', icon: '↩️', type: 'income' },
-];
-
-// ── Categories ──────────────────────────────────────────────────────────────
-
-export function getCategories() {
-  return load(KEYS.categories, DEFAULT_CATEGORIES);
+export function updateCard(data) {
+  const cards = load(KEYS.cards, []).map(c => c.id === data.id ? { ...c, ...data } : c);
+  save(KEYS.cards, cards);
 }
 
-export function saveCategories(cats) {
-  save(KEYS.categories, cats);
+export function deleteCard(id) {
+  const cards = load(KEYS.cards, []);
+  const card = cards.find(c => c.id === id);
+  if (card?.is_protected) return;
+  save(KEYS.cards, cards.filter(c => c.id !== id));
 }
 
-export function addCategory(cat) {
-  const cats = getCategories();
-  cats.push({ ...cat, id: 'cat-' + Date.now() });
-  saveCategories(cats);
+// ── Pay Periods ─────────────────────────────────────────────────
+
+export function listPayPeriods() {
+  return load(KEYS.payPeriods, []).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export function updateCategory(id, updates) {
-  const cats = getCategories().map((c) => (c.id === id ? { ...c, ...updates } : c));
-  saveCategories(cats);
-}
-
-export function deleteCategory(id) {
-  saveCategories(getCategories().filter((c) => c.id !== id));
-}
-
-// ── Transactions ────────────────────────────────────────────────────────────
-
-export function getTransactions() {
-  return load(KEYS.transactions, []);
-}
-
-export function addTransaction(tx) {
-  const txs = getTransactions();
-  txs.push({ ...tx, id: 'tx-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6) });
-  txs.sort((a, b) => b.date.localeCompare(a.date));
-  save(KEYS.transactions, txs);
-}
-
-export function updateTransaction(id, updates) {
-  const txs = getTransactions().map((t) => (t.id === id ? { ...t, ...updates } : t));
-  txs.sort((a, b) => b.date.localeCompare(a.date));
-  save(KEYS.transactions, txs);
-}
-
-export function deleteTransaction(id) {
-  save(KEYS.transactions, getTransactions().filter((t) => t.id !== id));
-}
-
-// ── Pay Periods ─────────────────────────────────────────────────────────────
-
-export function getPayPeriods() {
-  return load(KEYS.payPeriods, []);
-}
-
-export function savePayPeriods(periods) {
-  save(KEYS.payPeriods, periods);
-}
-
-export function generatePayPeriods(startDate, amount, count = 130) {
+export function seedPayPeriods(startDate = '2026-04-03', amount = 2100) {
   const periods = [];
   const start = new Date(startDate + 'T00:00:00');
-  for (let i = 0; i < count; i++) {
-    const d = new Date(start);
-    d.setDate(d.getDate() + i * 14);
+  const end = new Date(start);
+  end.setFullYear(end.getFullYear() + 5);
+  let current = new Date(start);
+  let i = 0;
+  while (current <= end) {
     periods.push({
-      id: 'pp-' + i,
-      date: d.toISOString().split('T')[0],
+      id: `pp-${i}`,
+      date: current.toISOString().split('T')[0],
       amount,
+      created_at: new Date().toISOString(),
     });
+    current.setDate(current.getDate() + 14);
+    i++;
   }
-  savePayPeriods(periods);
+  save(KEYS.payPeriods, periods);
   return periods;
 }
 
-// ── Settings ────────────────────────────────────────────────────────────────
-
-export function getSettings() {
-  return load(KEYS.settings, { currency: 'USD', payStartDate: '', payAmount: 0 });
+export function updatePayPeriodAmount(id, amount) {
+  const periods = load(KEYS.payPeriods, []).map(p => p.id === id ? { ...p, amount } : p);
+  save(KEYS.payPeriods, periods);
 }
 
-export function saveSettings(s) {
-  save(KEYS.settings, s);
-}
+// ── Auth (optional PIN) ─────────────────────────────────────────
 
-// ── Export / Import ─────────────────────────────────────────────────────────
+export function hasPin() { return !!load(KEYS.auth, null); }
+export function setPin(pin) { save(KEYS.auth, { pin }); }
+export function verifyPin(pin) { const a = load(KEYS.auth, null); return a && a.pin === pin; }
+export function removePin() { localStorage.removeItem(KEYS.auth); emit(); }
 
-export function exportAllData() {
+// ── Tab/Group prefs ─────────────────────────────────────────────
+
+export function loadTabNames() { return load(KEYS.tabNames, {}); }
+export function saveTabNames(n) { save(KEYS.tabNames, n); }
+export function loadTabOrder() { return load(KEYS.tabOrder, null); }
+export function saveTabOrder(o) { save(KEYS.tabOrder, o); }
+export function loadGroupOrder() { return load(KEYS.groupOrder, null); }
+export function saveGroupOrder(o) { save(KEYS.groupOrder, o); }
+export function loadGroupCollapsed() { return load(KEYS.groupCollapsed, {}); }
+export function saveGroupCollapsed(c) { save(KEYS.groupCollapsed, c); }
+
+// ── Export / Import ─────────────────────────────────────────────
+
+export function exportAll() {
   return JSON.stringify({
-    categories: getCategories(),
-    transactions: getTransactions(),
-    payPeriods: getPayPeriods(),
-    settings: getSettings(),
+    cards: load(KEYS.cards, []),
+    payPeriods: load(KEYS.payPeriods, []),
+    tabNames: load(KEYS.tabNames, {}),
+    tabOrder: load(KEYS.tabOrder, null),
+    groupOrder: load(KEYS.groupOrder, null),
+    groupCollapsed: load(KEYS.groupCollapsed, {}),
     exportDate: new Date().toISOString(),
   }, null, 2);
 }
 
-export function importAllData(jsonStr) {
-  const data = JSON.parse(jsonStr);
-  if (data.categories) saveCategories(data.categories);
-  if (data.transactions) save(KEYS.transactions, data.transactions);
-  if (data.payPeriods) savePayPeriods(data.payPeriods);
-  if (data.settings) saveSettings(data.settings);
+export function importAll(jsonStr) {
+  const d = JSON.parse(jsonStr);
+  if (d.cards) save(KEYS.cards, d.cards);
+  if (d.payPeriods) save(KEYS.payPeriods, d.payPeriods);
+  if (d.tabNames) save(KEYS.tabNames, d.tabNames);
+  if (d.tabOrder) save(KEYS.tabOrder, d.tabOrder);
+  if (d.groupOrder) save(KEYS.groupOrder, d.groupOrder);
+  if (d.groupCollapsed) save(KEYS.groupCollapsed, d.groupCollapsed);
 }
