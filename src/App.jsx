@@ -46,6 +46,9 @@ export default function App() {
 
   const inputRef = useRef(null);
   const payInputRef = useRef(null);
+  const [dragTabKey, setDragTabKey] = useState(null);
+  const [dropTargetTab, setDropTargetTab] = useState(null);
+  const [dropPosition, setDropPosition] = useState(null);
 
   useEffect(() => { setSortField('date_due'); setSortDir('asc'); }, [tab]);
   useEffect(() => { if (editing && inputRef.current) { inputRef.current.focus(); inputRef.current.select(); } }, [editing]);
@@ -164,6 +167,33 @@ export default function App() {
     setGroupCollapsedState(next);
     saveGroupCollapsed(next);
   };
+
+  // ── Tab drag reorder ──
+  const onTabDragStart = (e, key) => {
+    setDragTabKey(key);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const onTabDragOver = (e, key) => {
+    if (dragTabKey && dragTabKey !== key) {
+      e.preventDefault();
+      const rect = e.currentTarget.getBoundingClientRect();
+      setDropTargetTab(key);
+      setDropPosition(e.clientY < rect.top + rect.height / 2 ? 'above' : 'below');
+    }
+  };
+  const onTabDrop = (key) => {
+    if (!dragTabKey || dragTabKey === key) { setDragTabKey(null); setDropTargetTab(null); setDropPosition(null); return; }
+    const order = [...tabOrder];
+    const from = order.indexOf(dragTabKey);
+    order.splice(from, 1);
+    let to = order.indexOf(key);
+    if (dropPosition === 'below') to += 1;
+    order.splice(to, 0, dragTabKey);
+    setTabOrderState(order);
+    saveTabOrder(order);
+    setDragTabKey(null); setDropTargetTab(null); setDropPosition(null);
+  };
+  const onTabDragEnd = () => { setDragTabKey(null); setDropTargetTab(null); setDropPosition(null); };
 
   // ── Score helpers ──
   const allScoredItems = cards.filter(c => c.card_type === 'CreditScore' || (isCardOrBank(c.card_type) && (c.score_equifax != null || c.score_experian != null || c.score_transunion != null)));
@@ -288,42 +318,63 @@ export default function App() {
   // ══════════════════════════════════════════════════════════════════
 
   return (
-    <div className="h-full flex flex-col md:flex-row bg-dark-800">
+    <div className="h-full flex flex-col md:flex-row bg-dark-900">
       {/* ── Desktop Sidebar ── */}
-      <div className="desktop-sidebar w-52 shrink-0 border-r border-dark-700/50 bg-dark-800/80 flex-col px-3 py-4 overflow-y-auto hidden">
-        <p className="text-xs font-semibold text-dark-400 uppercase tracking-wider mb-3 px-3">Categories</p>
-        {tabOrder.map(key => (
-          <div key={key} className={`sidebar-item ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)}>
-            <TabIcon icon={ICON_MAP[key]} />
-            <span className="truncate">{tabNames[key]}</span>
-            <span className="ml-auto text-xs opacity-60">{counts[key] ?? ''}</span>
-          </div>
-        ))}
-        <div className={`sidebar-item ${tab === 'settings' ? 'active' : ''} mt-2`} onClick={() => setTab('settings')}>
+      <div className="desktop-sidebar w-56 shrink-0 border-r border-dark-700/30 bg-dark-800/60 flex-col px-3 py-5 overflow-y-auto hidden backdrop-blur-sm">
+        <p className="text-[10px] font-bold text-dark-500 uppercase tracking-[0.15em] mb-3 px-3">Categories</p>
+        {tabOrder.map(key => {
+          const isDragging = dragTabKey === key;
+          const isDropAbove = dropTargetTab === key && dropPosition === 'above';
+          const isDropBelow = dropTargetTab === key && dropPosition === 'below';
+          return (
+            <div key={key}
+              draggable
+              onDragStart={e => onTabDragStart(e, key)}
+              onDragOver={e => onTabDragOver(e, key)}
+              onDragLeave={() => { setDropTargetTab(null); setDropPosition(null); }}
+              onDrop={() => onTabDrop(key)}
+              onDragEnd={onTabDragEnd}
+              className={`sidebar-item ${tab === key ? 'active' : ''} ${isDragging ? 'dragging' : ''} ${isDropAbove ? 'drag-over-top' : ''} ${isDropBelow ? 'drag-over-bottom' : ''}`}
+              onClick={() => setTab(key)}
+            >
+              <span className="drag-handle" title="Drag to reorder">⠿</span>
+              <TabIcon icon={ICON_MAP[key]} />
+              <span className="truncate">{tabNames[key]}</span>
+              <span className="ml-auto text-[10px] font-semibold opacity-40">{counts[key] ?? ''}</span>
+            </div>
+          );
+        })}
+        <div className="my-2 mx-3 border-t border-dark-700/30"></div>
+        <div className={`sidebar-item ${tab === 'settings' ? 'active' : ''}`} onClick={() => setTab('settings')}>
+          <span className="w-3"></span>
           <TabIcon icon="settings" />
           <span>Settings</span>
         </div>
         {overallAvgScore != null && (
-          <div className="mt-auto pt-4 px-3 border-t border-dark-700/50">
-            <p className="text-xs text-dark-400 mb-1">Avg Credit Score</p>
+          <div className="mt-auto pt-4 px-4 border-t border-dark-700/30">
+            <p className="text-[10px] text-dark-500 uppercase tracking-wider mb-1">Avg Credit Score</p>
             <p className={`text-2xl font-bold ${scoreColor(overallAvgScore)}`}>{overallAvgScore}</p>
           </div>
         )}
       </div>
 
       {/* ── Mobile Bottom Nav ── */}
-      <nav className="mobile-nav fixed bottom-0 left-0 right-0 border-t border-dark-700/50 bg-dark-800 z-50 hidden">
-        {['all', 'cc', 'bills', 'banks', 'payperiods', 'settings'].map(key => (
-          <button key={key} onClick={() => setTab(key)} className={`flex-1 flex flex-col items-center py-2 pt-2.5 transition-colors ${tab === key ? 'text-accent-hover' : 'text-dark-400'}`}>
-            <TabIcon icon={ICON_MAP[key] || 'settings'} />
-            <span className="text-[10px] mt-0.5 font-medium">{key === 'all' ? 'All' : key === 'cc' ? 'Cards' : key === 'settings' ? 'More' : (tabNames[key] || key).split(' ')[0]}</span>
-          </button>
-        ))}
+      <nav className="mobile-nav fixed bottom-0 left-0 right-0 border-t border-dark-700/30 bg-dark-900/95 backdrop-blur-lg z-50 hidden">
+        <div className="max-w-lg mx-auto flex">
+          {['all', 'cc', 'bills', 'banks', 'payperiods', 'settings'].map(key => (
+            <button key={key} onClick={() => setTab(key)} className={`flex-1 flex flex-col items-center py-2.5 transition-all ${tab === key ? 'text-accent-hover' : 'text-dark-500'}`}>
+              <div className={`p-1 rounded-lg transition-all ${tab === key ? 'bg-accent/10' : ''}`}>
+                <TabIcon icon={ICON_MAP[key] || 'settings'} />
+              </div>
+              <span className="text-[10px] mt-0.5 font-semibold">{key === 'all' ? 'All' : key === 'cc' ? 'Cards' : key === 'settings' ? 'More' : (tabNames[key] || key).split(' ')[0]}</span>
+            </button>
+          ))}
+        </div>
       </nav>
 
       {/* ── Main Content ── */}
-      <div className="flex-1 overflow-y-auto main-content">
-        <div className="px-4 md:px-8 pb-8 pt-4 md:pt-6 max-w-6xl">
+      <div className="flex-1 overflow-y-auto main-content bg-dark-900">
+        <div className="px-4 md:px-8 pb-8 pt-5 md:pt-7 max-w-6xl">
 
           {tab === 'settings' ? (
             <SettingsPage cards={cards} payPeriods={payPeriods} />

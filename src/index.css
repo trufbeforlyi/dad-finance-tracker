@@ -1,7 +1,5 @@
 @import "tailwindcss";
 
-/* ── Custom dark theme (matches original Electron app) ── */
-
 @theme {
   --color-dark-50: #f8fafc;
   --color-dark-100: #e2e8f0;
@@ -22,71 +20,78 @@
 
 html, body, #root {
   height: 100%;
-  background: var(--color-dark-800);
+  background: var(--color-dark-900);
   color: var(--color-dark-100);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--color-dark-600); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--color-dark-600); border-radius: 9999px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-dark-500); }
 
+/* ── Inputs ── */
 input, select, textarea {
-  background: var(--color-dark-700);
+  background: var(--color-dark-800);
   border: 1px solid var(--color-dark-600);
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   padding: 0.5rem 0.75rem;
   color: var(--color-dark-100);
   font-size: 0.875rem;
   outline: none;
+  transition: all 0.2s;
 }
-input:focus, select:focus { box-shadow: 0 0 0 2px var(--color-accent); border-color: transparent; }
-input::placeholder { color: var(--color-dark-400); }
+input:focus, select:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 15%, transparent);
+}
+input::placeholder { color: var(--color-dark-500); }
 select { cursor: pointer; }
-button { cursor: pointer; transition: all 0.15s; }
+button { cursor: pointer; transition: all 0.2s; }
 
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type=number] { -moz-appearance: textfield; }
 
-/* ── Component styles ── */
-
+/* ── Buttons ── */
 .btn-primary {
-  background: var(--color-accent);
+  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-dim));
   color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.75rem;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   border: none;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-accent) 30%, transparent);
 }
-.btn-primary:hover { background: var(--color-accent-dim); }
-.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px color-mix(in srgb, var(--color-accent) 40%, transparent); }
+.btn-primary:active { transform: translateY(0); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
 
 .btn-danger {
-  background: #dc2626;
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
   color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.75rem;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   border: none;
 }
-.btn-danger:hover { background: #b91c1c; }
+.btn-danger:hover { transform: translateY(-1px); }
 
 .btn-ghost {
   background: transparent;
   color: var(--color-dark-300);
   padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
   font-size: 0.875rem;
   display: inline-flex;
   align-items: center;
@@ -95,45 +100,81 @@ input[type=number] { -moz-appearance: textfield; }
 }
 .btn-ghost:hover { background: var(--color-dark-700); color: var(--color-dark-100); }
 
+/* ── Card ── */
 .card {
-  background: color-mix(in srgb, var(--color-dark-700) 50%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-dark-600) 50%, transparent);
-  border-radius: 0.75rem;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--color-dark-700) 60%, transparent), color-mix(in srgb, var(--color-dark-800) 80%, transparent));
+  border: 1px solid color-mix(in srgb, var(--color-dark-600) 40%, transparent);
+  border-radius: 1rem;
   padding: 1.25rem;
+  backdrop-filter: blur(8px);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.card:hover {
+  border-color: color-mix(in srgb, var(--color-dark-500) 50%, transparent);
 }
 
+/* ── Badge ── */
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.125rem 0.625rem;
+  padding: 0.2rem 0.7rem;
   border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
 }
 
-.table-row { border-bottom: 1px solid color-mix(in srgb, var(--color-dark-700) 50%, transparent); transition: background 0.15s; }
-.table-row:hover { background: color-mix(in srgb, var(--color-dark-700) 30%, transparent); }
+/* ── Table ── */
+.table-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-dark-700) 50%, transparent);
+  transition: background 0.15s;
+}
+.table-row:hover { background: color-mix(in srgb, var(--color-dark-700) 40%, transparent); }
 
+/* ── Sidebar ── */
 .sidebar-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.625rem 0.75rem;
-  border-radius: 0.5rem;
-  font-size: 0.875rem;
+  gap: 0.625rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: 0.75rem;
+  font-size: 0.8125rem;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.2s;
   position: relative;
+  user-select: none;
 }
-.sidebar-item.active { background: color-mix(in srgb, var(--color-accent) 20%, transparent); color: var(--color-accent-hover); }
+.sidebar-item.active {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 15%, transparent), color-mix(in srgb, var(--color-accent) 8%, transparent));
+  color: var(--color-accent-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
 .sidebar-item:not(.active) { color: var(--color-dark-300); }
-.sidebar-item:not(.active):hover { color: var(--color-dark-100); background: var(--color-dark-700); }
+.sidebar-item:not(.active):hover { color: var(--color-dark-100); background: color-mix(in srgb, var(--color-dark-700) 60%, transparent); }
 
-.progress-bar { height: 0.5rem; border-radius: 9999px; overflow: hidden; background: var(--color-dark-600); }
-.progress-bar-fill { height: 100%; border-radius: 9999px; transition: all 0.5s; }
+.sidebar-item .drag-handle {
+  opacity: 0;
+  color: var(--color-dark-500);
+  cursor: grab;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+.sidebar-item:hover .drag-handle { opacity: 0.5; }
+.sidebar-item .drag-handle:hover { opacity: 1; color: var(--color-dark-300); }
+.sidebar-item .drag-handle:active { cursor: grabbing; }
 
-/* Mobile bottom nav */
+.sidebar-item.dragging { opacity: 0.3; transform: scale(0.95); }
+.sidebar-item.drag-over-top { border-top: 2px solid var(--color-accent); margin-top: -2px; }
+.sidebar-item.drag-over-bottom { border-bottom: 2px solid var(--color-accent); margin-bottom: -2px; }
+
+/* ── Progress bar ── */
+.progress-bar { height: 0.375rem; border-radius: 9999px; overflow: hidden; background: var(--color-dark-700); }
+.progress-bar-fill { height: 100%; border-radius: 9999px; transition: width 0.7s ease-out; }
+
+/* ── Responsive ── */
 @media (max-width: 767px) {
   .desktop-sidebar { display: none !important; }
   .mobile-nav { display: flex !important; }
@@ -143,3 +184,7 @@ input[type=number] { -moz-appearance: textfield; }
   .desktop-sidebar { display: flex !important; }
   .mobile-nav { display: none !important; }
 }
+
+/* ── Animations ── */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.card { animation: fadeIn 0.3s ease-out; }
