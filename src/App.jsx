@@ -380,9 +380,9 @@ export default function App() {
             <SettingsPage cards={cards} payPeriods={payPeriods} />
           ) : tab === 'all' ? (
             <div className="space-y-6">
-              <div className="flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold text-dark-100">{tabNames.all || 'Everything'}</h1>
-                <div className="relative">
+                <div className="relative ml-auto">
                   <button onClick={() => setShowAddMenu(!showAddMenu)} className="btn-primary"><PlusIcon /> Add Item ▾</button>
                   {showAddMenu && (
                     <>
