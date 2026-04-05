@@ -657,11 +657,11 @@ function PayPeriodsPage({ payPeriods, payFilter, setPayFilter, editingPayId, set
   const pastPP = payPeriods.filter(p => ppIsPast(p.date));
   const futurePP = payPeriods.filter(p => !ppIsPast(p.date));
 
-  // Earned = sum of actual amounts for past periods (falls back to expected amount)
-  const totalEarned = pastPP.reduce((s, p) => s + (p.actual != null ? p.actual : p.amount), 0);
-  const totalExpected = pastPP.reduce((s, p) => s + p.amount, 0);
+  // Earned = per-period pay rate (from first period, or 0)
+  const earnedPerPeriod = payPeriods.length > 0 ? payPeriods[0].amount : 0;
   const totalFuture = futurePP.reduce((s, p) => s + p.amount, 0);
-  const totalAll = totalEarned + totalFuture;
+  const totalPast = pastPP.reduce((s, p) => s + p.amount, 0);
+  const totalAll = totalPast + totalFuture;
 
   let ppFiltered = payPeriods;
   if (payFilter === 'upcoming') ppFiltered = futurePP;
@@ -796,13 +796,9 @@ function PayPeriodsPage({ payPeriods, payFilter, setPayFilter, editingPayId, set
               onChange={e => setEarnedValue(e.target.value)}
               onBlur={() => {
                 const num = parseFloat(earnedValue);
-                if (!isNaN(num) && num >= 0 && pastPP.length > 0) {
-                  const perPeriod = Math.round((num / pastPP.length) * 100) / 100;
-                  const remainder = Math.round((num - perPeriod * pastPP.length) * 100) / 100;
-                  pastPP.forEach((p, i) => {
-                    const amt = i === 0 ? perPeriod + remainder : perPeriod;
-                    updatePayPeriod(p.id, { amount: amt, actual: amt });
-                  });
+                if (!isNaN(num) && num >= 0) {
+                  // Update ALL periods to this amount
+                  updateAllPayPeriodDefaults(num);
                 }
                 setEditingEarned(false);
               }}
@@ -814,9 +810,9 @@ function PayPeriodsPage({ payPeriods, payFilter, setPayFilter, editingPayId, set
             />
           ) : (
             <p className="text-xl font-bold text-green-400 cursor-pointer hover:text-accent-hover transition-colors"
-              onClick={() => { setEditingEarned(true); setEarnedValue(String(totalEarned)); }}>{fmt(totalEarned)}</p>
+              onClick={() => { setEditingEarned(true); setEarnedValue(String(earnedPerPeriod)); }}>{fmt(earnedPerPeriod)}</p>
           )}
-          <p className="text-dark-500 text-xs">{pastPP.length} periods</p>
+          <p className="text-dark-500 text-xs">per period</p>
         </div>
         <div className="card">
           <p className="text-dark-400 text-xs uppercase mb-1">Remaining</p>
