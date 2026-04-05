@@ -791,19 +791,23 @@ function PayPeriodsPage({ payPeriods, payFilter, setPayFilter, editingPayId, set
           <p className="text-dark-500 text-xs">{payPeriods.length} periods</p>
         </div>
         <div className="card cursor-pointer hover:border-green-500/30 transition-colors" onClick={() => { if (!editingEarned) { setEditingEarned(true); setEarnedValue(String(totalEarned)); } }}>
-          <p className="text-dark-400 text-xs uppercase mb-1">Earned</p>
+          <p className="text-dark-400 text-xs uppercase mb-1">Earned (Actual)</p>
           {editingEarned ? (
             <div className="relative" onClick={e => e.stopPropagation()}>
-              <span className="absolute left-0 top-1/2 -translate-y-1/2 text-green-400 font-bold text-xl">$</span>
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-green-400 font-bold text-xl">$</span>
               <input ref={earnedRef} type="number" step="0.01" min="0" value={earnedValue}
                 onChange={e => setEarnedValue(e.target.value)}
                 onBlur={() => {
                   const num = parseFloat(earnedValue);
                   if (!isNaN(num) && num >= 0 && pastPP.length > 0) {
+                    // Distribute the total evenly across all past pay periods
                     const perPeriod = Math.round((num / pastPP.length) * 100) / 100;
+                    // Put any rounding remainder on the first period
                     const remainder = Math.round((num - perPeriod * pastPP.length) * 100) / 100;
                     pastPP.forEach((p, i) => {
-                      updatePayPeriod(p.id, { actual: i === 0 ? perPeriod + remainder : perPeriod });
+                      const amt = i === 0 ? perPeriod + remainder : perPeriod;
+                      // Update both amount AND actual so the table reflects it
+                      updatePayPeriod(p.id, { amount: amt, actual: amt });
                     });
                   }
                   setEditingEarned(false);
@@ -812,19 +816,13 @@ function PayPeriodsPage({ payPeriods, payFilter, setPayFilter, editingPayId, set
                   if (e.key === 'Enter') e.target.blur();
                   if (e.key === 'Escape') setEditingEarned(false);
                 }}
-                className="!py-0 !px-0 !pl-5 !bg-transparent !border-0 !ring-0 text-xl font-bold text-green-400 w-full focus:!ring-2 focus:!ring-green-500 rounded"
-                style={{ outline: 'none' }}
+                className="!py-1 !pl-7 text-xl font-bold text-green-400 w-full rounded"
               />
             </div>
           ) : (
             <p className="text-xl font-bold text-green-400 hover:text-green-300 transition-colors">{fmt(totalEarned)}</p>
           )}
-          <p className="text-dark-500 text-xs">{pastPP.length} periods · click to edit</p>
-          {totalEarned !== totalExpected && (
-            <p className={`text-xs mt-1 ${totalEarned > totalExpected ? 'text-green-400' : 'text-red-400'}`}>
-              {totalEarned > totalExpected ? '↑' : '↓'} {fmt(Math.abs(totalEarned - totalExpected))} vs expected
-            </p>
-          )}
+          <p className="text-dark-500 text-xs">{pastPP.length} period{pastPP.length !== 1 ? 's' : ''} · click to edit</p>
         </div>
         <div className="card">
           <p className="text-dark-400 text-xs uppercase mb-1">Remaining</p>
