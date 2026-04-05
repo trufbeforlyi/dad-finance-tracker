@@ -374,7 +374,7 @@ export default function App() {
 
       {/* ── Main Content ── */}
       <div className="flex-1 overflow-y-auto main-content bg-dark-900">
-        <div className="px-4 md:px-8 pb-8 pt-5 md:pt-7 max-w-6xl">
+        <div className="px-4 md:px-8 pb-8 pt-5 md:pt-7 w-full">
 
           {tab === 'settings' ? (
             <SettingsPage cards={cards} payPeriods={payPeriods} />
@@ -1005,7 +1005,7 @@ function SettingsPage({ cards, payPeriods }) {
   };
 
   return (
-    <div className="space-y-6 max-w-lg">
+    <div className="space-y-6 w-full">
       <h1 className="text-2xl font-bold text-dark-100">Settings</h1>
 
       <div className="card">
